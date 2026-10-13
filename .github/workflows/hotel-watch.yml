@@ -1,0 +1,47 @@
+name: hotel-watch
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"   # 20분마다 (GitHub 사정으로 몇 분 늦을 수 있음)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = 평소 감시 / test = 텔레그램 테스트 메시지"
+        default: "test"
+        type: choice
+        options: [test, check]
+
+permissions:
+  contents: write   # state.json 커밋용
+
+concurrency:
+  group: hotel-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 공실 확인
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MODE: ${{ github.event.inputs.mode || 'check' }}
+        run: python check.py
+
+      - name: 상태 저장 (바뀐 경우만)
+        if: always()
+        run: |
+          git config user.name  "hotel-watch-bot"
+          git config user.email "hotel-watch-bot@users.noreply.github.com"
+          git add state.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "update state [skip ci]" && git push)
