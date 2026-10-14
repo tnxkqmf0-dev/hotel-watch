@@ -69,6 +69,33 @@ def telegram(text):
 
 
 # ---------------------------------------------------------------- API
+_HV_STATE = {"idx": 0}
+
+
+def header_variants():
+    """楽天 '허용 웹사이트' 검증용 헤더 조합 후보.
+    Actions IP는 매번 바뀌어 IP 허용은 불가 → 등록한 사이트를 Referer/Origin으로 보냄.
+    楽天이 어느 형식으로 비교하는지 문서가 불명확해 여러 조합을 순서대로 시도한다."""
+    site = (os.environ.get("RAKUTEN_ORIGIN") or "https://github.com").strip()
+    u = urllib.parse.urlsplit(site)
+    origin = f"{u.scheme}://{u.netloc}"
+    toggled = site[:-1] if site.endswith("/") else site + "/"
+    cands = [
+        {"Referer": site},
+        {"Referer": toggled},
+        {"Referer": origin + "/"},
+        {"Origin": origin, "Referer": site},
+        {"Origin": origin},
+    ]
+    out, seen = [], set()
+    for c in cands:
+        key = tuple(sorted(c.items()))
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
+
+
 def fetch_vacancies(hotel_nos, checkin, checkout, adults):
     """조건에 맞는 모든 (호텔, 객실, 플랜) 레코드를 반환. 공실 0이면 []."""
     params = {
@@ -88,16 +115,12 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
     while True:
         params["page"] = page
         url = API_URL + "?" + urllib.parse.urlencode(params)
-        # 楽天 앱의 '허용 웹사이트' 검증용 (Actions IP는 매번 바뀌어서 IP 허용 방식은 불가)
-        site = os.environ.get("RAKUTEN_ORIGIN") or "https://github.com"
-        u = urllib.parse.urlsplit(site)
-        origin = f"{u.scheme}://{u.netloc}"
-        referer = site if u.path not in ("", "/") else origin + "/"
-        req = urllib.request.Request(url, headers={
-            "Origin": origin, "Referer": referer,
-            "User-Agent": "hotel-watch/1.0"})
         data = None
-        for attempt in range(3):
+        attempt = 0
+        variants = header_variants()
+        while True:
+            hv = variants[_HV_STATE["idx"]]
+            req = urllib.request.Request(url, headers={**hv, "User-Agent": "hotel-watch/1.0"})
             try:
                 with urllib.request.urlopen(req, timeout=30) as r:
                     data = json.load(r)
@@ -106,11 +129,19 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
                 payload = e.read().decode("utf-8", "replace")
                 if e.code == 404:  # not_found = 공실 없음
                     return records
-                if e.code in (429, 500, 503) and attempt < 2:
-                    time.sleep(5 * (attempt + 1))
+                if e.code == 403 and "REFERRER" in payload and _HV_STATE["idx"] + 1 < len(variants):
+                    _HV_STATE["idx"] += 1  # 다른 헤더 조합으로 재시도
+                    time.sleep(1.2)
                     continue
-                k = params["accessKey"]
-                hint = f" (accessKey 길이 {len(k)}자)" if e.code == 403 else ""
+                if e.code in (429, 500, 503) and attempt < 2:
+                    attempt += 1
+                    time.sleep(5 * attempt)
+                    continue
+                hint = ""
+                if e.code == 403:
+                    tried = " | ".join(" ".join(f"{k}={v}" for k, v in x.items()) for x in variants)
+                    hint = (f" (accessKey {len(params['accessKey'])}자, "
+                            f"RAKUTEN_ORIGIN={os.environ.get('RAKUTEN_ORIGIN') or '(미설정)'}, 시도: {tried})")
                 raise RuntimeError(f"Rakuten API {e.code}{hint}: {payload[:300]}")
         records.extend(parse_response(data))
         info = data.get("pagingInfo", {})
@@ -291,7 +322,7 @@ def main():
 
     state["available"] = sorted(cur)
     save_json(STATE_PATH, state)  # 내용이 바뀐 경우에만 워크플로가 커밋함
-    print(f"공실 {len(cur)}건, 신규 {len(new)}건")
+    print(f"공실 {len(cur)}건, 신규 {len(new)}건 / 통과한 헤더: {header_variants()[_HV_STATE['idx']]}")
     return 0
 
 
