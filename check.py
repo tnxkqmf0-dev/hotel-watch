@@ -77,6 +77,8 @@ def header_variants():
     Actions IP는 매번 바뀌어 IP 허용은 불가 → 등록한 사이트를 Referer/Origin으로 보냄.
     楽天이 어느 형식으로 비교하는지 문서가 불명확해 여러 조합을 순서대로 시도한다."""
     site = (os.environ.get("RAKUTEN_ORIGIN") or "https://github.com").strip()
+    if "://" not in site:  # "github.com" 처럼 도메인만 넣은 경우
+        site = "https://" + site
     u = urllib.parse.urlsplit(site)
     origin = f"{u.scheme}://{u.netloc}"
     toggled = site[:-1] if site.endswith("/") else site + "/"
