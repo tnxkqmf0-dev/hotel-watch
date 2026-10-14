@@ -89,9 +89,12 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
         params["page"] = page
         url = API_URL + "?" + urllib.parse.urlencode(params)
         # 楽天 앱의 '허용 웹사이트' 검증용 (Actions IP는 매번 바뀌어서 IP 허용 방식은 불가)
-        origin = os.environ.get("RAKUTEN_ORIGIN") or "https://github.com"
+        site = os.environ.get("RAKUTEN_ORIGIN") or "https://github.com"
+        u = urllib.parse.urlsplit(site)
+        origin = f"{u.scheme}://{u.netloc}"
+        referer = site if u.path not in ("", "/") else origin + "/"
         req = urllib.request.Request(url, headers={
-            "Origin": origin, "Referer": origin.rstrip("/") + "/",
+            "Origin": origin, "Referer": referer,
             "User-Agent": "hotel-watch/1.0"})
         data = None
         for attempt in range(3):
