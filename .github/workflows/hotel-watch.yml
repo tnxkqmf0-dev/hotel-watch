@@ -2,7 +2,7 @@ name: hotel-watch
 
 on:
   schedule:
-    - cron: "*/20 * * * *"   # 20분마다 (GitHub 사정으로 몇 분 늦을 수 있음)
+    - cron: "7,27,47 * * * *"   # 20분마다. 정각(:00)은 GitHub 혼잡으로 자주 밀려서 피함
   workflow_dispatch:
     inputs:
       mode:
