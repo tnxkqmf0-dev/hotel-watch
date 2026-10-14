@@ -72,8 +72,8 @@ def telegram(text):
 def fetch_vacancies(hotel_nos, checkin, checkout, adults):
     """조건에 맞는 모든 (호텔, 객실, 플랜) 레코드를 반환. 공실 0이면 []."""
     params = {
-        "applicationId": os.environ["RAKUTEN_APP_ID"],
-        "accessKey": os.environ["RAKUTEN_ACCESS_KEY"],
+        "applicationId": os.environ["RAKUTEN_APP_ID"].strip(),
+        "accessKey": os.environ["RAKUTEN_ACCESS_KEY"].strip(),
         "format": "json",
         "hotelNo": ",".join(str(n) for n in hotel_nos),
         "checkinDate": checkin,
@@ -109,7 +109,9 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
                 if e.code in (429, 500, 503) and attempt < 2:
                     time.sleep(5 * (attempt + 1))
                     continue
-                raise RuntimeError(f"Rakuten API {e.code}: {payload[:300]}")
+                k = params["accessKey"]
+                hint = f" (accessKey 길이 {len(k)}, 앞 4자리 {k[:4]})" if e.code == 403 else ""
+                raise RuntimeError(f"Rakuten API {e.code}{hint}: {payload[:300]}")
         records.extend(parse_response(data))
         info = data.get("pagingInfo", {})
         if page >= int(info.get("pageCount", 1) or 1):
