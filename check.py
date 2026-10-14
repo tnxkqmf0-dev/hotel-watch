@@ -88,10 +88,15 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
     while True:
         params["page"] = page
         url = API_URL + "?" + urllib.parse.urlencode(params)
+        # 楽天 앱의 '허용 웹사이트' 검증용 (Actions IP는 매번 바뀌어서 IP 허용 방식은 불가)
+        origin = os.environ.get("RAKUTEN_ORIGIN") or "https://github.com"
+        req = urllib.request.Request(url, headers={
+            "Origin": origin, "Referer": origin.rstrip("/") + "/",
+            "User-Agent": "hotel-watch/1.0"})
         data = None
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(url, timeout=30) as r:
+                with urllib.request.urlopen(req, timeout=30) as r:
                     data = json.load(r)
                 break
             except urllib.error.HTTPError as e:
