@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "check = 평소 감시 / test = 텔레그램 테스트 메시지"
+        description: "test = 지금 공실 현황 전체 받기 / check = 평소 감시(새 공실만)"
         default: "test"
         type: choice
         options: [test, check]

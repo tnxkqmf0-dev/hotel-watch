@@ -391,7 +391,7 @@ def main():
     period = f"{cfg['checkin'][5:].replace('-', '/')}~{cfg['checkout'][5:].replace('-', '/')}"
 
     if mode == "test":
-        head = (f"✅ <b>테스트 성공</b> · {period}\n"
+        head = (f"📋 <b>지금 공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n"
                 f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {len({found[k]['hotelNo'] for k in cur})}곳")
         send_blocks(head, render_blocks([found[k] for k in cur], cfg))
     elif new:
