@@ -31,7 +31,9 @@
           "label": "小上がり트윈"
         }
       ],
-      "_note": "일반 'ツイン'은 19.2㎡라 제외(=가장 작은 트윈). 트리플 25.8㎡/포스 30.4㎡는 침대 3~4개라 제외."
+      "_note": "일반 'ツイン'은 19.2㎡라 제외(=가장 작은 트윈). 트리플 25.8㎡/포스 30.4㎡는 침대 3~4개라 제외.",
+      "official": "https://www.google.com/search?q=%E8%A5%BF%E9%89%84%E3%83%9B%E3%83%86%E3%83%AB%20%E3%82%AF%E3%83%AB%E3%83%BC%E3%83%A0%20%E5%8D%9A%E5%A4%9A%E7%A5%87%E5%9C%92%20%E6%AB%9B%E7%94%B0%E7%A5%9E%E7%A4%BE%E5%89%8D%20%E5%85%AC%E5%BC%8F",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%8B%88%EC%8B%9C%ED%85%8C%EC%B8%A0%20%ED%98%B8%ED%85%94%20%ED%81%AC%EB%A3%B8%20%ED%95%98%EC%B9%B4%ED%83%80%20%EA%B8%B0%EC%98%A8"
     },
     {
       "no": 172876,
@@ -57,7 +59,9 @@
           "area": 54,
           "label": "스위트트윈"
         }
-      ]
+      ],
+      "official": "https://go-jrhotel-m.reservation.jp/ko/hotels/blossom-hakatapremier/plans",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%8D%94%20%EB%B8%94%EB%9D%BC%EC%84%AC%20%ED%95%98%EC%B9%B4%ED%83%80%20%ED%94%84%EB%A6%AC%EB%AF%B8%EC%96%B4"
     },
     {
       "no": 172316,
@@ -74,7 +78,9 @@
           "label": "주니어스위트트윈"
         }
       ],
-      "_note": "가장 작은 방은 스탠다드 더블 18.7㎡. 트리플 26.6㎡는 침대 3개라 제외."
+      "_note": "가장 작은 방은 스탠다드 더블 18.7㎡. 트리플 26.6㎡는 침대 3개라 제외.",
+      "official": "https://www.gardenhotels.co.jp/fukuoka-gion/",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%AF%B8%EC%93%B0%EC%9D%B4%20%EA%B0%80%EB%93%A0%20%ED%98%B8%ED%85%94%20%ED%9B%84%EC%BF%A0%EC%98%A4%EC%B9%B4%20%EA%B8%B0%EC%98%A8"
     },
     {
       "no": 72791,
@@ -91,7 +97,9 @@
           "label": "디럭스트윈"
         }
       ],
-      "_note": "가장 작은 방은 스탠다드 더블 15㎡. '+엑스트라베드' 타입은 제외."
+      "_note": "가장 작은 방은 스탠다드 더블 15㎡. '+엑스트라베드' 타입은 제외.",
+      "official": "https://iconia.co.jp/hotel-mystays-fukuoka-tenjin-fukuoka",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%ED%98%B8%ED%85%94%20%EB%A7%88%EC%9D%B4%EC%8A%A4%ED%85%8C%EC%9D%B4%EC%A6%88%20%ED%9B%84%EC%BF%A0%EC%98%A4%EC%B9%B4%20%ED%85%90%EC%A7%84"
     },
     {
       "no": 171975,
@@ -103,7 +111,10 @@
           "label": "모데레이트트윈"
         }
       ],
-      "_note": "모데레이트 더블 17.2㎡ / 싱글 / 슈페리어 더블은 제외."
+      "_note": "모데레이트 더블 17.2㎡ / 싱글 / 슈페리어 더블은 제외.",
+      "official": "https://www.google.com/search?q=%E3%83%AA%E3%83%83%E3%83%81%E3%83%A2%E3%83%B3%E3%83%89%E3%83%9B%E3%83%86%E3%83%AB%E5%A4%A9%E7%A5%9E%E8%A5%BF%E9%80%9A%20%E5%85%AC%E5%BC%8F",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%A6%AC%EC%B9%98%EB%AA%AC%EB%93%9C%20%ED%98%B8%ED%85%94%20%ED%85%90%EC%A7%84%20%EB%8B%88%EC%8B%9C%EB%8F%84%EB%A6%AC"
     }
-  ]
+  ],
+  "kr_list_url": "https://travel.rakuten.com/kor/ko-kr/hotel_list/cnt_japan/sub_fukuoka_prefecture/cty_fukuoka_city/"
 }

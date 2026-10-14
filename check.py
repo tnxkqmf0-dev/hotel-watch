@@ -323,6 +323,7 @@ def render_blocks(items, cfg):
     """호텔별 블록 리스트. 객실마다 3박 전체가 있으면 그것만, 없으면 1박 날짜들."""
     nights = (dt.date.fromisoformat(cfg["checkout"]) - dt.date.fromisoformat(cfg["checkin"])).days
     order = {h["no"]: i for i, h in enumerate(cfg["hotels"])}
+    hcfg = {h["no"]: h for h in cfg["hotels"]}
     by_hotel = {}
     for v in items:
         rooms = by_hotel.setdefault(v["hotelNo"], {})
@@ -332,12 +333,20 @@ def render_blocks(items, cfg):
         rooms = by_hotel[no]
         name = next(iter(rooms.values()))[0]["displayName"]
         lines = [f"🏨 <b>{html.escape(name)}</b>"]
+        h = hcfg.get(no, {})
+        alt = []
+        if h.get("kr"):
+            alt.append(f'<a href="{html.escape(h["kr"])}">🇰🇷楽天 한국어</a>')
+        if h.get("official"):
+            alt.append(f'<a href="{html.escape(h["official"])}">🏨공식</a>')
+        if alt:
+            lines.append("   " + " · ".join(alt))
         for (label, area), vs in sorted(rooms.items(), key=lambda kv: kv[0][1]):
             full = [v for v in vs if v["label"] == "전체"]
             lines.append(f"• {html.escape(label)} {area:g}㎡")
             if full:
                 v = min(full, key=plan_rank)
-                lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '예약')}")
+                lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '楽天JP')}")
             else:
                 parts = [f"{_link(v, v['start'])} {_yen(v)}{_tags(v)}"
                          for v in sorted(vs, key=lambda x: x["start"])]
