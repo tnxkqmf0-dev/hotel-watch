@@ -249,8 +249,16 @@ def qualifies(rec, hotel_cfg, cfg):
             limit = cfg.get("max_total_per_night_yen")
             if limit and rec["total"] and rec["total"] > limit:
                 return None
-            return area
+            return area, room.get("label") or name
     return None
+
+
+NONREF_RE = re.compile(r"キャンセル不可|返金不可|変更不可|払い戻し不可")
+
+
+def plan_rank(rec):
+    """취소 가능한 플랜 우선, 그다음 싼 순."""
+    return (bool(NONREF_RE.search(rec.get("planName", ""))), rec.get("total") or 9e9)
 
 
 def stay_ranges(cfg):
@@ -274,15 +282,17 @@ def collect(cfg):
             h = hotels.get(rec["hotelNo"])
             if not h:
                 continue
-            area = qualifies(rec, h, cfg)
-            if area is None:
+            q = qualifies(rec, h, cfg)
+            if q is None:
                 continue
+            area, room_label = q
             rng = f"{ci:%m/%d}~{co:%m/%d}"
             key = f"{rec['hotelNo']}|{rng}|{rec['roomName']}"
             prev = found.get(key)
-            # 같은 객실은 가장 싼 플랜 하나만 남김
-            if prev is None or (rec["total"] or 9e9) < (prev["total"] or 9e9):
+            # 같은 객실은 플랜 하나만 남김 (취소 가능 > 저렴)
+            if prev is None or plan_rank(rec) < plan_rank(prev):
                 found[key] = {**rec, "area": area, "range": rng, "label": label,
+                              "start": f"{ci:%m/%d}", "roomLabel": room_label,
                               "displayName": h["name"], "planCount": (prev or {}).get("planCount", 0) + 1}
             else:
                 prev["planCount"] += 1
@@ -291,17 +301,61 @@ def collect(cfg):
 
 
 # ---------------------------------------------------------------- message
-def fmt_item(v):
-    yen = f"¥{v['total']:,}" if isinstance(v.get("total"), int) else "가격확인"
-    link = v.get("reserveUrl") or v.get("planListUrl")
-    bf = " · 조식포함" if v.get("withBreakfast") == 1 else ""
-    more = f" (외 플랜 {v['planCount'] - 1}개)" if v.get("planCount", 1) > 1 else ""
-    return (f"🏨 <b>{html.escape(v['displayName'])}</b>\n"
-            f"📅 {v['range']} ({v['label']})\n"
-            f"🛏 {html.escape(v['roomName'])} · {v['area']}㎡\n"
-            f"💴 1박째 {yen}{bf}{more}\n"
-            f"📝 {html.escape(v['planName'][:60])}\n"
-            f"👉 <a href=\"{html.escape(link)}\">예약하러 가기</a>")
+def _yen(v):
+    return f"¥{v['total']:,}" if isinstance(v.get("total"), int) else "가격확인"
+
+
+def _link(v, text):
+    url = v.get("reserveUrl") or v.get("planListUrl") or ""
+    return f'<a href="{html.escape(url)}">{html.escape(text)}</a>'
+
+
+def _tags(v):
+    t = []
+    if v.get("withBreakfast") == 1:
+        t.append("조식")
+    if NONREF_RE.search(v.get("planName", "")):
+        t.append("⚠️취소불가")
+    return f" ({', '.join(t)})" if t else ""
+
+
+def render_blocks(items, cfg):
+    """호텔별 블록 리스트. 객실마다 3박 전체가 있으면 그것만, 없으면 1박 날짜들."""
+    nights = (dt.date.fromisoformat(cfg["checkout"]) - dt.date.fromisoformat(cfg["checkin"])).days
+    order = {h["no"]: i for i, h in enumerate(cfg["hotels"])}
+    by_hotel = {}
+    for v in items:
+        rooms = by_hotel.setdefault(v["hotelNo"], {})
+        rooms.setdefault((v["roomLabel"], v["area"]), []).append(v)
+    blocks = []
+    for no in sorted(by_hotel, key=lambda n: order.get(n, 99)):
+        rooms = by_hotel[no]
+        name = next(iter(rooms.values()))[0]["displayName"]
+        lines = [f"🏨 <b>{html.escape(name)}</b>"]
+        for (label, area), vs in sorted(rooms.items(), key=lambda kv: kv[0][1]):
+            full = [v for v in vs if v["label"] == "전체"]
+            lines.append(f"• {html.escape(label)} {area:g}㎡")
+            if full:
+                v = min(full, key=plan_rank)
+                lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '예약')}")
+            else:
+                parts = [f"{_link(v, v['start'])} {_yen(v)}{_tags(v)}"
+                         for v in sorted(vs, key=lambda x: x["start"])]
+                lines.append("   🌙 1박만: " + " · ".join(parts))
+        blocks.append("\n".join(lines))
+    return blocks
+
+
+def send_blocks(head, blocks, limit=3800):
+    """블록 경계에서만 잘라 보냄 (링크 태그가 중간에 끊기지 않게)."""
+    msg = head
+    for b in blocks:
+        if len(msg) + len(b) + 2 > limit:
+            telegram(msg)
+            msg = b
+        else:
+            msg += "\n\n" + b
+    telegram(msg)
 
 
 def main():
@@ -333,22 +387,25 @@ def main():
     cur = set(found)
     new = sorted(cur - prev)
 
+    full_hotels = sorted({found[k]["displayName"] for k in cur if found[k]["label"] == "전체"})
+    period = f"{cfg['checkin'][5:].replace('-', '/')}~{cfg['checkout'][5:].replace('-', '/')}"
+
     if mode == "test":
-        lines = [f"✅ 테스트 성공! 현재 조건 맞는 공실 {len(cur)}건"]
-        lines += [fmt_item(found[k]) for k in sorted(cur)[:10]]
-        telegram("\n\n".join(lines))
+        head = (f"✅ <b>테스트 성공</b> · {period}\n"
+                f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {len({found[k]['hotelNo'] for k in cur})}곳")
+        send_blocks(head, render_blocks([found[k] for k in cur], cfg))
     elif new:
-        head = f"🚨 <b>빈방 떴다! ({len(new)}건)</b>  {now:%m/%d %H:%M}"
-        telegram("\n\n".join([head] + [fmt_item(found[k]) for k in new]))
+        head = f"🚨 <b>빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준"
+        send_blocks(head, render_blocks([found[k] for k in new], cfg))
 
     # 하루 한 번 생존 신고
     hb_hour = cfg.get("heartbeat_hour_kst")
     today = now.date().isoformat()
     if mode != "test" and hb_hour is not None and now.hour >= hb_hour and state.get("last_heartbeat") != today:
-        full = sum(1 for k in cur if found[k]["label"] == "전체")
-        telegram(f"🫡 감시 중 ({cfg['checkin'][5:]}~{cfg['checkout'][5:]})\n"
-                 f"현재 조건 맞는 공실: 전체 일정 {full}건 / 1박 단위 {len(cur) - full}건\n"
-                 f"{cfg['stop_after'][5:]}까지 계속 확인할게요.")
+        where = ", ".join(full_hotels) if full_hotels else "없음"
+        telegram(f"🫡 감시 중 · {period}\n"
+                 f"지금 전체 일정 가능: {html.escape(where)}\n"
+                 f"{cfg['stop_after'][5:].replace('-', '/')}까지 20분마다 확인할게요.")
         state["last_heartbeat"] = today
 
     state["available"] = sorted(cur)
