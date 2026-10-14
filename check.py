@@ -319,8 +319,9 @@ def _tags(v):
     return f" ({', '.join(t)})" if t else ""
 
 
-def render_blocks(items, cfg):
-    """호텔별 블록 리스트. 객실마다 3박 전체가 있으면 그것만, 없으면 1박 날짜들."""
+def render_blocks(items, cfg, show_empty=False):
+    """호텔별 블록 리스트. 객실마다 3박 전체가 있으면 그것만, 없으면 1박 날짜들.
+    show_empty=True 면 공실 없는 호텔도 '없음'으로 맨 아래 표시."""
     nights = (dt.date.fromisoformat(cfg["checkout"]) - dt.date.fromisoformat(cfg["checkin"])).days
     order = {h["no"]: i for i, h in enumerate(cfg["hotels"])}
     hcfg = {h["no"]: h for h in cfg["hotels"]}
@@ -341,9 +342,10 @@ def render_blocks(items, cfg):
             alt.append(f'<a href="{html.escape(h["official"])}">🏨공식</a>')
         if alt:
             lines.append("   " + " · ".join(alt))
-        for (label, area), vs in sorted(rooms.items(), key=lambda kv: kv[0][1]):
+        for (label, area), vs in sorted(rooms.items(), key=lambda kv: kv[0][1] or 0):
             full = [v for v in vs if v["label"] == "전체"]
-            lines.append(f"• {html.escape(label)} {area:g}㎡")
+            size = f" {area:g}㎡" if area else ""
+            lines.append(f"• {html.escape(label)}{size}")
             if full:
                 v = min(full, key=plan_rank)
                 lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '楽天JP')}")
@@ -352,6 +354,12 @@ def render_blocks(items, cfg):
                          for v in sorted(vs, key=lambda x: x["start"])]
                 lines.append("   🌙 1박만: " + " · ".join(parts))
         blocks.append("\n".join(lines))
+    if show_empty:
+        empty = [h["name"] for h in cfg["hotels"] if h["no"] not in by_hotel]
+        if empty:
+            blocks.append("❌ <b>조건 맞는 공실 없음</b>\n" + "\n".join(f"· {html.escape(n)}" for n in empty))
+        if cfg.get("not_on_rakuten"):
+            blocks.append("ℹ️ 楽天에 없어 감시 불가: " + html.escape(", ".join(cfg["not_on_rakuten"])))
     return blocks
 
 
@@ -375,6 +383,11 @@ def main():
 
     if now.date() > dt.date.fromisoformat(cfg["stop_after"]) and mode != "test":
         print("감시 기간 종료 → 아무것도 하지 않음")
+        return 0
+
+    q = cfg.get("quiet_hours_kst")  # 예: [22, 6] → 22시~다음날 6시 쉼
+    if q and mode != "test" and (now.hour >= q[0] or now.hour < q[1]):
+        print(f"조용한 시간({q[0]}시~{q[1]}시) → 건너뜀")
         return 0
 
     if mode == "test":  # 楽天과 무관하게 텔레그램 연결부터 따로 확인
@@ -402,7 +415,7 @@ def main():
     if mode == "test":
         head = (f"📋 <b>지금 공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n"
                 f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {len({found[k]['hotelNo'] for k in cur})}곳")
-        send_blocks(head, render_blocks([found[k] for k in cur], cfg))
+        send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True))
     elif new:
         head = f"🚨 <b>빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준"
         send_blocks(head, render_blocks([found[k] for k in new], cfg))
@@ -411,10 +424,9 @@ def main():
     hb_hour = cfg.get("heartbeat_hour_kst")
     today = now.date().isoformat()
     if mode != "test" and hb_hour is not None and now.hour >= hb_hour and state.get("last_heartbeat") != today:
-        where = ", ".join(full_hotels) if full_hotels else "없음"
-        telegram(f"🫡 감시 중 · {period}\n"
-                 f"지금 전체 일정 가능: {html.escape(where)}\n"
-                 f"{cfg['stop_after'][5:].replace('-', '/')}까지 계속 확인할게요.")
+        head = (f"🫡 <b>오늘의 공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n"
+                f"전체 일정 가능 {len(full_hotels)}곳 · {cfg['stop_after'][5:].replace('-', '/')}까지 매시간 확인 중")
+        send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True))
         state["last_heartbeat"] = today
 
     state["available"] = sorted(cur)

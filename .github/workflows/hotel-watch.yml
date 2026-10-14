@@ -1,14 +1,14 @@
 name: hotel-watch
 
 # 동작 방식
-# - public 레포: 한 번 시작하면 10분마다 확인을 약 5시간 50분 반복 → 끝나면 스스로 다음 실행을 걸어 이어감
+# - public 레포: 한 번 시작하면 1시간마다 확인을 약 5시간 50분 반복 (밤 22시~6시는 확인 생략) → 끝나면 스스로 다음 실행을 걸어 이어감
 #   (GitHub cron은 자주 밀리거나 건너뛰어서 cron에만 의존하지 않음. public은 Actions 무료 무제한)
 # - private 레포: 무료 한도 보호를 위해 반복 없이 1회만 확인
 # - cron은 체인이 끊겼을 때 다시 살리는 백업 역할
 
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "17 0-12,21-23 * * *"   # KST 06~21시 매시 17분 (백업용, UTC 기준)
   workflow_dispatch:
     inputs:
       mode:
@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  INTERVAL_SEC: 600          # 확인 간격 10분
+  INTERVAL_SEC: 3600         # 확인 간격 1시간
   LOOP_MINUTES: 350          # 한 실행에서 반복할 시간 (잡 최대 6시간 이내)
 
 jobs:

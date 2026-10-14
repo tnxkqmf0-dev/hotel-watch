@@ -7,7 +7,7 @@
   "min_area_m2": 20,
   "check_partial_nights": true,
   "max_total_per_night_yen": null,
-  "heartbeat_hour_kst": 9,
+  "heartbeat_hour_kst": 8,
   "exclude_keywords": [
     "喫煙",
     "エキストラ",
@@ -114,7 +114,51 @@
       "_note": "모데레이트 더블 17.2㎡ / 싱글 / 슈페리어 더블은 제외.",
       "official": "https://www.google.com/search?q=%E3%83%AA%E3%83%83%E3%83%81%E3%83%A2%E3%83%B3%E3%83%89%E3%83%9B%E3%83%86%E3%83%AB%E5%A4%A9%E7%A5%9E%E8%A5%BF%E9%80%9A%20%E5%85%AC%E5%BC%8F",
       "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%A6%AC%EC%B9%98%EB%AA%AC%EB%93%9C%20%ED%98%B8%ED%85%94%20%ED%85%90%EC%A7%84%20%EB%8B%88%EC%8B%9C%EB%8F%84%EB%A6%AC"
+    },
+    {
+      "no": 181424,
+      "name": "KOKO HOTEL 후쿠오카 텐진",
+      "rooms": [
+        {
+          "match": "ハリウッドツイン",
+          "area": 29,
+          "label": "할리우드트윈"
+        },
+        {
+          "match": "スタンダードツイン",
+          "area": 20,
+          "label": "스탠다드트윈"
+        }
+      ],
+      "_note": "가장 작은 방은 스탠다드더블 15㎡. 스탠다드트윈은 정확히 20㎡(조건 '20㎡ 이상' 충족).",
+      "official": "https://www.google.com/search?q=KOKO%20HOTEL%20%E7%A6%8F%E5%B2%A1%E5%A4%A9%E7%A5%9E%20%E5%85%AC%E5%BC%8F",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EC%BD%94%EC%BD%94%20%ED%98%B8%ED%85%94%20%ED%9B%84%EC%BF%A0%EC%98%A4%EC%B9%B4%20%ED%85%90%EC%A7%84"
+    },
+    {
+      "no": 198463,
+      "name": "바운시 바이 리가 후쿠오카 하카타",
+      "rooms": [
+        {
+          "match": "ユニバーサル.*ツイン",
+          "label": "유니버설트윈"
+        },
+        {
+          "match": "ツイン",
+          "label": "트윈"
+        }
+      ],
+      "_note": "객실명에 '18平米/27平米'가 들어 있어 면적 자동 판별 → 18㎡ 트윈(테라스 포함)은 자동 제외, 27㎡만 알림.",
+      "official": "https://www.google.com/search?q=%E3%83%90%E3%82%A6%E3%83%B3%E3%82%B7%E3%83%BC%E3%83%BB%E3%83%90%E3%82%A4%E3%83%BB%E3%83%AA%E3%83%BC%E3%82%AC%20%E7%A6%8F%E5%B2%A1%E5%8D%9A%E5%A4%9A%20%E5%85%AC%E5%BC%8F",
+      "kr": "https://www.google.com/search?q=%EB%9D%BC%EC%BF%A0%ED%85%90%20%ED%8A%B8%EB%9E%98%EB%B8%94%20%EB%B0%94%EC%9A%B4%EC%8B%9C%20%EB%B0%94%EC%9D%B4%20%EB%A6%AC%EA%B0%80%20%ED%9B%84%EC%BF%A0%EC%98%A4%EC%B9%B4%20%ED%95%98%EC%B9%B4%ED%83%80"
     }
   ],
-  "kr_list_url": "https://travel.rakuten.com/kor/ko-kr/hotel_list/cnt_japan/sub_fukuoka_prefecture/cty_fukuoka_city/"
+  "kr_list_url": "https://travel.rakuten.com/kor/ko-kr/hotel_list/cnt_japan/sub_fukuoka_prefecture/cty_fukuoka_city/",
+  "quiet_hours_kst": [
+    22,
+    6
+  ],
+  "not_on_rakuten": [
+    "LOF Hotel Tenjin South (자체 예약만)",
+    "TOWER HOTEL"
+  ]
 }
