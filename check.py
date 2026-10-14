@@ -47,25 +47,50 @@ def now_kst():
     return dt.datetime.now(KST)
 
 
+def summary(text):
+    """GitHub 실행 페이지 상단(Summary)에 표시 → 폰에서도 로그 안 뒤지고 바로 보임."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    print(text)
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text + "\n\n")
+
+
+def _tg_send(token, chat, text, html_mode):
+    params = {"chat_id": chat, "text": text, "disable_web_page_preview": "true"}
+    if html_mode:
+        params["parse_mode"] = "HTML"
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
+                                 data=urllib.parse.urlencode(params).encode())
+    with urllib.request.urlopen(req, timeout=20) as r:
+        r.read()
+
+
 def telegram(text):
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    """실패해도 감시 자체는 죽지 않게 하고, 원인은 Summary에 남긴다."""
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    chat = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
     if not token or not chat:
-        print("[telegram 미설정] " + text)
-        return
-    # 텔레그램 메시지 한도(4096자) 대비 분할
+        summary("⚠️ 텔레그램 Secret 미설정 (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
+        return False
     chunks = [text[i:i + 3800] for i in range(0, len(text), 3800)] or [""]
     for chunk in chunks:
-        body = urllib.parse.urlencode({
-            "chat_id": chat,
-            "text": chunk,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": "true",
-        }).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage", data=body)
-        with urllib.request.urlopen(req, timeout=20) as r:
-            r.read()
+        try:
+            _tg_send(token, chat, chunk, True)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")
+            if e.code == 400 and "parse" in body.lower():  # HTML 깨짐 → 일반 텍스트로 재전송
+                try:
+                    _tg_send(token, chat, re.sub(r"<[^>]+>", "", html.unescape(chunk)), False)
+                    continue
+                except urllib.error.HTTPError as e2:
+                    e, body = e2, e2.read().decode("utf-8", "replace")
+            tip = {401: "봇 토큰이 틀림", 400: "chat ID가 틀렸거나 봇에게 먼저 말을 안 걸었음",
+                   403: "봇이 차단됐거나 chat ID가 다른 사람/그룹", 404: "봇 토큰 형식이 틀림"}.get(e.code, "")
+            summary(f"⚠️ 텔레그램 전송 실패 {e.code} {tip}\n\n`{body[:300]}`\n"
+                    f"(chat ID 길이 {len(chat)}자, 토큰에 ':' 포함={':' in token})")
+            return False
+    return True
 
 
 # ---------------------------------------------------------------- API
@@ -289,13 +314,17 @@ def main():
         print("감시 기간 종료 → 아무것도 하지 않음")
         return 0
 
+    if mode == "test":  # 楽天과 무관하게 텔레그램 연결부터 따로 확인
+        ok = telegram("🔔 텔레그램 연결 OK — 이어서 楽天 API를 확인할게요.")
+        summary("✅ 텔레그램 연결 OK" if ok else "❌ 텔레그램 연결 실패 (위 메시지 참고)")
+
     try:
         found = collect(cfg)
     except Exception as e:  # API 장애 등은 하루 한 번만 알림
-        print(f"ERROR: {e}", file=sys.stderr)
+        summary(f"❌ 楽天 API 오류\n\n```\n{e}\n```")
         today = now.date().isoformat()
         if state.get("last_error") != today or mode == "test":
-            telegram(f"⚠️ 숙소 감시 오류\n<code>{html.escape(str(e))[:500]}</code>")
+            telegram(f"⚠️ 숙소 감시 오류\n<code>{html.escape(str(e)[:1500])}</code>")
             state["last_error"] = today
             save_json(STATE_PATH, state)
         return 1
@@ -324,7 +353,7 @@ def main():
 
     state["available"] = sorted(cur)
     save_json(STATE_PATH, state)  # 내용이 바뀐 경우에만 워크플로가 커밋함
-    print(f"공실 {len(cur)}건, 신규 {len(new)}건 / 통과한 헤더: {header_variants()[_HV_STATE['idx']]}")
+    summary(f"✅ 楽天 API OK — 공실 {len(cur)}건, 신규 {len(new)}건 / 통과한 헤더: {header_variants()[_HV_STATE['idx']]}")
     return 0
 
 
