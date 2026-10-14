@@ -414,7 +414,7 @@ def main():
         where = ", ".join(full_hotels) if full_hotels else "없음"
         telegram(f"🫡 감시 중 · {period}\n"
                  f"지금 전체 일정 가능: {html.escape(where)}\n"
-                 f"{cfg['stop_after'][5:].replace('-', '/')}까지 20분마다 확인할게요.")
+                 f"{cfg['stop_after'][5:].replace('-', '/')}까지 계속 확인할게요.")
         state["last_heartbeat"] = today
 
     state["available"] = sorted(cur)
