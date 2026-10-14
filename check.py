@@ -110,7 +110,7 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
                     time.sleep(5 * (attempt + 1))
                     continue
                 k = params["accessKey"]
-                hint = f" (accessKey 길이 {len(k)}, 앞 4자리 {k[:4]})" if e.code == 403 else ""
+                hint = f" (accessKey 길이 {len(k)}자)" if e.code == 403 else ""
                 raise RuntimeError(f"Rakuten API {e.code}{hint}: {payload[:300]}")
         records.extend(parse_response(data))
         info = data.get("pagingInfo", {})
