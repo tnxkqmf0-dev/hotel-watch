@@ -319,7 +319,7 @@ def _tags(v):
     return f" ({', '.join(t)})" if t else ""
 
 
-def render_blocks(items, cfg, show_empty=False):
+def render_blocks(items, cfg, show_empty=False, new_keys=()):
     """호텔별 블록 리스트. 객실마다 3박 전체가 있으면 그것만, 없으면 1박 날짜들.
     show_empty=True 면 공실 없는 호텔도 '없음'으로 맨 아래 표시."""
     nights = (dt.date.fromisoformat(cfg["checkout"]) - dt.date.fromisoformat(cfg["checkin"])).days
@@ -345,7 +345,8 @@ def render_blocks(items, cfg, show_empty=False):
         for (label, area), vs in sorted(rooms.items(), key=lambda kv: kv[0][1] or 0):
             full = [v for v in vs if v["label"] == "전체"]
             size = f" {area:g}㎡" if area else ""
-            lines.append(f"• {html.escape(label)}{size}")
+            badge = " 🆕" if any(v.get("key") in new_keys for v in vs) else ""
+            lines.append(f"• {html.escape(label)}{size}{badge}")
             if full:
                 v = min(full, key=plan_rank)
                 lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '楽天JP')}")
@@ -412,22 +413,17 @@ def main():
     full_hotels = sorted({found[k]["displayName"] for k in cur if found[k]["label"] == "전체"})
     period = f"{cfg['checkin'][5:].replace('-', '/')}~{cfg['checkout'][5:].replace('-', '/')}"
 
-    if mode == "test":
-        head = (f"📋 <b>지금 공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n"
-                f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {len({found[k]['hotelNo'] for k in cur})}곳")
-        send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True))
-    elif new:
-        head = f"🚨 <b>빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준"
-        send_blocks(head, render_blocks([found[k] for k in new], cfg))
-
-    # 하루 한 번 생존 신고
-    hb_hour = cfg.get("heartbeat_hour_kst")
-    today = now.date().isoformat()
-    if mode != "test" and hb_hour is not None and now.hour >= hb_hour and state.get("last_heartbeat") != today:
-        head = (f"🫡 <b>오늘의 공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n"
-                f"전체 일정 가능 {len(full_hotels)}곳 · {cfg['stop_after'][5:].replace('-', '/')}까지 매시간 확인 중")
-        send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True))
-        state["last_heartbeat"] = today
+    for k, v in found.items():
+        v["key"] = k
+    n_hotels = len({found[k]["hotelNo"] for k in cur})
+    summary_line = f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {n_hotels}곳 (감시 {len(cfg['hotels'])}곳)"
+    if new and mode != "test":
+        head = f"🚨 <b>빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}\n🆕 = 새로 풀린 방"
+    else:
+        head = f"📋 <b>공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}"
+    send_every = cfg.get("send_status_every_run", True)
+    if mode == "test" or new or send_every:
+        send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True, new_keys=set(new)))
 
     state["available"] = sorted(cur)
     save_json(STATE_PATH, state)  # 내용이 바뀐 경우에만 워크플로가 커밋함
