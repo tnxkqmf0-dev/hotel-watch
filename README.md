@@ -17,10 +17,10 @@
 2. **텔레그램 봇**: @BotFather → `/newbot` → 토큰 복사. 만든 봇에게 아무 말이나 한 번 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates` 열어서 `"chat":{"id":숫자}` 의 숫자가 chat ID
 3. **GitHub Secrets** (레포 → Settings → Secrets and variables → Actions → New repository secret)
    - `RAKUTEN_APP_ID`, `RAKUTEN_ACCESS_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-4. **테스트**: Actions 탭 → hotel-watch → Run workflow (mode=test) → 텔레그램에 "✅ 테스트 성공" 오면 끝
+4. **테스트**: Actions 탭 → hotel-watch → Run workflow (mode=test) → 텔레그램에 "🔔 텔레그램 연결 OK"와 공실 현황이 오면 끝
 
 ## 조건 바꾸기
-`config.json`만 고치면 됩니다. 예) 가격 상한 `max_total_per_night_yen: 40000`, 트리플도 허용하려면 `exclude_keywords`에서 `トリプル` 삭제 후 해당 호텔 `rooms`에 추가.
+`config.json`만 고치면 됩니다. 예) 가격 상한 `max_total_per_night_yen: 40000`, 검색 범위 `area.radius_km`, 다다미 판정 키워드 `area.room_keywords`, 제외 키워드 `area.exclude_keywords`.
 
 ## 참고
 - 楽天에 올라온 재고만 봅니다(아고다·부킹 재고와 별개). 알림 오면 楽天에서 바로 잡는 게 제일 빠름.

@@ -136,6 +136,7 @@ def fetch_vacancies(target, checkin, checkout, adults, pattern=1):
         "adultNum": adults,
         "roomNum": 1,
         "searchPattern": pattern,
+        "datumType": 1,  # 위경도를 일반 도(WGS84) 단위로
         "hits": 30,
         "responseType": "middle",
     }
@@ -233,6 +234,9 @@ def parse_response(data):
                 "reserveUrl": rb.get("reserveUrl") or "",
                 "withBreakfast": rb.get("withBreakfastFlag"),
                 "total": dc.get("total"),
+                "address": (basic.get("address1") or "") + (basic.get("address2") or ""),
+                "station": basic.get("nearestStation") or "",
+                "lat": basic.get("latitude"), "lng": basic.get("longitude"),
             })
     return out
 
@@ -329,11 +333,31 @@ def tatami_match(rec, cfg):
     return area, label[:40]
 
 
+def _km(a, lat, lng):
+    import math
+    try:
+        lat, lng = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+    dy = (lat - a["lat"]) * 111.0
+    dx = (lng - a["lng"]) * 111.0 * math.cos(math.radians(a["lat"]))
+    return round(math.hypot(dx, dy), 1)
+
+
+def remember_info(info, rec, a):
+    """호텔 위치 정보(구·최寄역·중심거리) 저장."""
+    if not rec.get("hotelNo") or not rec.get("address"):
+        return
+    m = re.search(r"([^\s市県]+区)", rec["address"])
+    info[str(rec["hotelNo"])] = {"ward": m.group(1) if m else "", "station": rec.get("station", ""),
+                                 "km": _km(a, rec.get("lat"), rec.get("lng"))}
+
+
 def _chunks(xs, n):
     return [xs[i:i + n] for i in range(0, len(xs), n)]
 
 
-def discover(cfg):
+def discover(cfg, info=None):
     """반경 내 楽天 호텔을 훑어 다다미 객실이 있는 호텔 목록 {번호: 이름} 생성."""
     a = cfg["area"]
     geo = {"latitude": a["lat"], "longitude": a["lng"], "searchRadius": a["radius_km"], "datumType": 1}
@@ -343,6 +367,8 @@ def discover(cfg):
         for rec in fetch_vacancies(geo, ci, co, cfg["adults"], pattern=0):
             if rec["hotelNo"]:
                 hotels[rec["hotelNo"]] = rec["hotelName"]
+                if info is not None:
+                    remember_info(info, rec, a)
         time.sleep(1.2)
     catalog = {}
     for ci, co in dates:  # 2단계: 객실 단위로 다다미 객실 존재 여부 확인
@@ -361,8 +387,9 @@ def collect_area(cfg, state, force_discover=False):
     last = state.get("last_discover", "")
     every = dt.timedelta(hours=a.get("discover_every_hours", 24))
     stale = not last or now_kst() - dt.datetime.fromisoformat(last) >= every
-    if force_discover or not catalog or stale:
-        catalog.update(discover(cfg))  # 한 번 찾은 호텔은 계속 유지(매진돼도 목록에 남김)
+    info = state.setdefault("hotel_info", {})
+    if force_discover or not catalog or stale or any(n not in info for n in catalog):
+        catalog.update(discover(cfg, info))  # 한 번 찾은 호텔은 계속 유지(매진돼도 목록에 남김)
         state["tatami_catalog"] = catalog
         state["last_discover"] = now_kst().isoformat(timespec="minutes")
     found = {}
@@ -370,6 +397,7 @@ def collect_area(cfg, state, force_discover=False):
     for ci, co, label in stay_ranges(cfg):
         for batch in _chunks(nos, 15):
             for rec in fetch_vacancies(batch, ci.isoformat(), co.isoformat(), cfg["adults"]):
+                remember_info(info, rec, a)
                 q = tatami_match(rec, cfg)
                 if not q:
                     continue
@@ -386,9 +414,15 @@ def collect_area(cfg, state, force_discover=False):
                     prev["planCount"] += 1
             time.sleep(1.2)
     # 렌더링용 호텔 목록 (링크 포함)
-    cfg["hotels"] = [{"no": int(n), "name": name,
+    def where(n):
+        i = info.get(n, {})
+        parts = [x for x in [i.get("ward"), i.get("station")] if x]
+        if i.get("km") is not None:
+            parts.append(f"중심 {i['km']}km")
+        return " · ".join(parts)
+    cfg["hotels"] = [{"no": int(n), "name": name, "where": where(n),
                       "kr": _gsearch(f"라쿠텐 트래블 {name}"), "official": _gsearch(f"{name} 公式")}
-                     for n, name in sorted(catalog.items(), key=lambda kv: kv[1])]
+                     for n, name in sorted(catalog.items(), key=lambda kv: (info.get(kv[0], {}).get("km") or 99))]
     return found
 
 
@@ -427,6 +461,8 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
         name = next(iter(rooms.values()))[0]["displayName"]
         lines = [f"🏨 <b>{html.escape(name)}</b>"]
         h = hcfg.get(no, {})
+        if h.get("where"):
+            lines.append(f"   📍 {html.escape(h['where'])}")
         alt = []
         if h.get("kr"):
             alt.append(f'<a href="{html.escape(h["kr"])}">🇰🇷楽天 한국어</a>')
@@ -448,9 +484,10 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
                 lines.append("   🌙 1박만: " + " · ".join(parts))
         blocks.append("\n".join(lines))
     if show_empty:
-        empty = [h["name"] for h in cfg["hotels"] if h["no"] not in by_hotel]
+        empty = [h["name"] + (f" ({h['where']})" if h.get("where") else "")
+                 for h in cfg["hotels"] if h["no"] not in by_hotel]
         if empty:
-            if len(empty) > 8:  # 많으면 한 줄로 압축
+            if len(empty) > 30:  # 많으면 한 줄로 압축
                 blocks.append(f"❌ <b>공실 없음 ({len(empty)}곳)</b>\n" + html.escape(" · ".join(empty)))
             else:
                 blocks.append("❌ <b>조건 맞는 공실 없음</b>\n" + "\n".join(f"· {html.escape(n)}" for n in empty))
