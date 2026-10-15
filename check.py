@@ -123,21 +123,26 @@ def header_variants():
     return out
 
 
-def fetch_vacancies(hotel_nos, checkin, checkout, adults):
-    """조건에 맞는 모든 (호텔, 객실, 플랜) 레코드를 반환. 공실 0이면 []."""
+def fetch_vacancies(target, checkin, checkout, adults, pattern=1):
+    """조건에 맞는 모든 (호텔, 객실, 플랜) 레코드를 반환. 공실 0이면 [].
+    target: 호텔번호 리스트, 또는 위치검색 파라미터 dict(latitude/longitude/searchRadius 등).
+    pattern: 1=플랜·객실 단위, 0=호텔 단위(호텔 목록 파악용)."""
     params = {
         "applicationId": os.environ["RAKUTEN_APP_ID"].strip(),
         "accessKey": os.environ["RAKUTEN_ACCESS_KEY"].strip(),
         "format": "json",
-        "hotelNo": ",".join(str(n) for n in hotel_nos),
         "checkinDate": checkin,
         "checkoutDate": checkout,
         "adultNum": adults,
         "roomNum": 1,
-        "searchPattern": 1,  # 플랜·객실 단위
+        "searchPattern": pattern,
         "hits": 30,
         "responseType": "middle",
     }
+    if isinstance(target, dict):
+        params.update(target)
+    else:
+        params["hotelNo"] = ",".join(str(n) for n in target)
     records, page = [], 1
     while True:
         params["page"] = page
@@ -172,7 +177,7 @@ def fetch_vacancies(hotel_nos, checkin, checkout, adults):
                 raise RuntimeError(f"Rakuten API {e.code}{hint}: {payload[:300]}")
         records.extend(parse_response(data))
         info = data.get("pagingInfo", {})
-        if page >= int(info.get("pageCount", 1) or 1):
+        if page >= min(int(info.get("pageCount", 1) or 1), 100):
             return records
         page += 1
         time.sleep(1.2)
@@ -300,6 +305,93 @@ def collect(cfg):
     return found
 
 
+# ---------------------------------------------------------------- area (다다미방) mode
+def _gsearch(q):
+    return "https://www.google.com/search?q=" + urllib.parse.quote(q)
+
+
+def tatami_match(rec, cfg):
+    """다다미 객실이면 (면적 or None, 라벨) 반환, 아니면 None."""
+    a = cfg["area"]
+    room = rec.get("roomName", "")
+    plan = rec.get("planName", "")
+    # 객실명은 넓게, 플랜명은 오탐 방지로 좁게 ('和洋バイキング朝食' 같은 것 제외)
+    if not (any(k in room for k in a["room_keywords"])
+            or any(k in plan for k in a.get("plan_keywords", []))):
+        return None
+    if any(k in room for k in a.get("exclude_keywords", [])):
+        return None
+    m = AREA_RE.search(room)
+    area = float(m.group(1)) if m else None
+    if area is not None and area < cfg["min_area_m2"]:
+        return None
+    label = re.sub(r"(【[^】]*】|\[[^\]]*\]|＜[^＞]*＞|<[^>]*>|[■□][^■□]*[■□])", "", room).strip() or room
+    return area, label[:40]
+
+
+def _chunks(xs, n):
+    return [xs[i:i + n] for i in range(0, len(xs), n)]
+
+
+def discover(cfg):
+    """반경 내 楽天 호텔을 훑어 다다미 객실이 있는 호텔 목록 {번호: 이름} 생성."""
+    a = cfg["area"]
+    geo = {"latitude": a["lat"], "longitude": a["lng"], "searchRadius": a["radius_km"], "datumType": 1}
+    dates = [(cfg["checkin"], cfg["checkout"])] + [tuple(x) for x in a.get("probe_ranges", [])]
+    hotels = {}
+    for ci, co in dates:  # 1단계: 반경 내 호텔 번호 수집 (호텔 단위 검색이라 가벼움)
+        for rec in fetch_vacancies(geo, ci, co, cfg["adults"], pattern=0):
+            if rec["hotelNo"]:
+                hotels[rec["hotelNo"]] = rec["hotelName"]
+        time.sleep(1.2)
+    catalog = {}
+    for ci, co in dates:  # 2단계: 객실 단위로 다다미 객실 존재 여부 확인
+        for batch in _chunks(sorted(hotels), 15):
+            for rec in fetch_vacancies(batch, ci, co, cfg["adults"]):
+                if tatami_match(rec, cfg):
+                    catalog[str(rec["hotelNo"])] = rec["hotelName"]
+            time.sleep(1.2)
+    summary(f"🔎 탐색 완료: 반경 {a['radius_km']}km 호텔 {len(hotels)}곳 중 다다미 객실 보유 {len(catalog)}곳")
+    return catalog
+
+
+def collect_area(cfg, state, force_discover=False):
+    a = cfg["area"]
+    catalog = dict(state.get("tatami_catalog", {}))
+    last = state.get("last_discover", "")
+    every = dt.timedelta(hours=a.get("discover_every_hours", 24))
+    stale = not last or now_kst() - dt.datetime.fromisoformat(last) >= every
+    if force_discover or not catalog or stale:
+        catalog.update(discover(cfg))  # 한 번 찾은 호텔은 계속 유지(매진돼도 목록에 남김)
+        state["tatami_catalog"] = catalog
+        state["last_discover"] = now_kst().isoformat(timespec="minutes")
+    found = {}
+    nos = sorted(int(n) for n in catalog)
+    for ci, co, label in stay_ranges(cfg):
+        for batch in _chunks(nos, 15):
+            for rec in fetch_vacancies(batch, ci.isoformat(), co.isoformat(), cfg["adults"]):
+                q = tatami_match(rec, cfg)
+                if not q:
+                    continue
+                area, room_label = q
+                rng = f"{ci:%m/%d}~{co:%m/%d}"
+                key = f"{rec['hotelNo']}|{rng}|{rec['roomName']}"
+                prev = found.get(key)
+                if prev is None or plan_rank(rec) < plan_rank(prev):
+                    found[key] = {**rec, "area": area, "range": rng, "label": label,
+                                  "start": f"{ci:%m/%d}", "roomLabel": room_label,
+                                  "displayName": catalog.get(str(rec["hotelNo"]), rec["hotelName"]),
+                                  "planCount": (prev or {}).get("planCount", 0) + 1}
+                else:
+                    prev["planCount"] += 1
+            time.sleep(1.2)
+    # 렌더링용 호텔 목록 (링크 포함)
+    cfg["hotels"] = [{"no": int(n), "name": name,
+                      "kr": _gsearch(f"라쿠텐 트래블 {name}"), "official": _gsearch(f"{name} 公式")}
+                     for n, name in sorted(catalog.items(), key=lambda kv: kv[1])]
+    return found
+
+
 # ---------------------------------------------------------------- message
 def _yen(v):
     return f"¥{v['total']:,}" if isinstance(v.get("total"), int) else "가격확인"
@@ -358,7 +450,10 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
     if show_empty:
         empty = [h["name"] for h in cfg["hotels"] if h["no"] not in by_hotel]
         if empty:
-            blocks.append("❌ <b>조건 맞는 공실 없음</b>\n" + "\n".join(f"· {html.escape(n)}" for n in empty))
+            if len(empty) > 8:  # 많으면 한 줄로 압축
+                blocks.append(f"❌ <b>공실 없음 ({len(empty)}곳)</b>\n" + html.escape(" · ".join(empty)))
+            else:
+                blocks.append("❌ <b>조건 맞는 공실 없음</b>\n" + "\n".join(f"· {html.escape(n)}" for n in empty))
         if cfg.get("not_on_rakuten"):
             blocks.append("ℹ️ 楽天에 없어 감시 불가: " + html.escape(", ".join(cfg["not_on_rakuten"])))
     return blocks
@@ -387,16 +482,19 @@ def main():
         return 0
 
     q = cfg.get("quiet_hours_kst")  # 예: [22, 6] → 22시~다음날 6시 쉼
-    if q and mode != "test" and (now.hour >= q[0] or now.hour < q[1]):
+    if q and mode not in ("test", "discover") and (now.hour >= q[0] or now.hour < q[1]):
         print(f"조용한 시간({q[0]}시~{q[1]}시) → 건너뜀")
         return 0
 
-    if mode == "test":  # 楽天과 무관하게 텔레그램 연결부터 따로 확인
+    if mode in ("test", "discover"):  # 楽天과 무관하게 텔레그램 연결부터 따로 확인
         ok = telegram("🔔 텔레그램 연결 OK — 이어서 楽天 API를 확인할게요.")
         summary("✅ 텔레그램 연결 OK" if ok else "❌ 텔레그램 연결 실패 (위 메시지 참고)")
 
     try:
-        found = collect(cfg)
+        if cfg.get("area"):
+            found = collect_area(cfg, state, force_discover=(mode == "discover"))
+        else:
+            found = collect(cfg)
     except Exception as e:  # API 장애 등은 하루 한 번만 알림
         summary(f"❌ 楽天 API 오류\n\n```\n{e}\n```")
         today = now.date().isoformat()
@@ -416,13 +514,14 @@ def main():
     for k, v in found.items():
         v["key"] = k
     n_hotels = len({found[k]["hotelNo"] for k in cur})
+    kind = "다다미방 " if cfg.get("area") else ""
     summary_line = f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {n_hotels}곳 (감시 {len(cfg['hotels'])}곳)"
-    if new and mode != "test":
-        head = f"🚨 <b>빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}\n🆕 = 새로 풀린 방"
+    if new and mode not in ("test", "discover"):
+        head = f"🚨 <b>{kind}빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}\n🆕 = 새로 풀린 방"
     else:
-        head = f"📋 <b>공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}"
+        head = f"📋 <b>{kind}공실 현황</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}"
     send_every = cfg.get("send_status_every_run", True)
-    if mode == "test" or new or send_every:
+    if mode in ("test", "discover") or new or send_every:
         send_blocks(head, render_blocks([found[k] for k in cur], cfg, show_empty=True, new_keys=set(new)))
 
     state["available"] = sorted(cur)

@@ -12,10 +12,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "test = 지금 공실 현황 받기 / loop = 감시 반복 시작 / check = 1회 확인"
-        default: "test"
+        description: "loop = 감시 반복 시작 / test = 지금 현황 받기 / discover = 다다미 호텔 목록 다시 찾기 / check = 1회 확인"
+        default: "loop"
         type: choice
-        options: [test, loop, check]
+        options: [loop, test, discover, check]
 
 permissions:
   contents: write   # state.json 커밋
@@ -33,6 +33,7 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    # 다다미 호텔 탐색(하루 1번)은 수 분 걸릴 수 있음
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +87,7 @@ jobs:
           while :; do
             n=$((n+1))
             echo "::group::확인 #$n  $(TZ=Asia/Seoul date '+%m/%d %H:%M')"
+            git pull -q --rebase || true   # 설정/코드 변경을 실행 중에도 반영
             MODE=check python check.py || true
             save_state
             echo "::endgroup::"
