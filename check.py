@@ -224,13 +224,13 @@ def parse_response(data):
             dc = m.get("dailyCharge", {})
             out.append({
                 "hotelNo": int(basic.get("hotelNo", 0) or 0),
-                "hotelName": basic.get("hotelName", ""),
-                "planListUrl": basic.get("planListUrl", ""),
-                "roomName": rb.get("roomName", ""),
-                "roomClass": rb.get("roomClass", ""),
-                "planName": rb.get("planName", ""),
+                "hotelName": basic.get("hotelName") or "",
+                "planListUrl": basic.get("planListUrl") or "",
+                "roomName": rb.get("roomName") or "",
+                "roomClass": rb.get("roomClass") or "",
+                "planName": rb.get("planName") or "",
                 "planId": rb.get("planId", ""),
-                "reserveUrl": rb.get("reserveUrl", ""),
+                "reserveUrl": rb.get("reserveUrl") or "",
                 "withBreakfast": rb.get("withBreakfastFlag"),
                 "total": dc.get("total"),
             })
@@ -496,6 +496,9 @@ def main():
         else:
             found = collect(cfg)
     except Exception as e:  # API 장애 등은 하루 한 번만 알림
+        import traceback
+        tb = traceback.extract_tb(e.__traceback__)[-1]
+        e = f"{type(e).__name__}: {e} (check.py {tb.lineno}행 {tb.name})"
         summary(f"❌ 楽天 API 오류\n\n```\n{e}\n```")
         today = now.date().isoformat()
         if state.get("last_error") != today or mode == "test":
