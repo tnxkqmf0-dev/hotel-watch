@@ -388,6 +388,13 @@ def collect_area(cfg, state, force_discover=False):
     every = dt.timedelta(hours=a.get("discover_every_hours", 24))
     stale = not last or now_kst() - dt.datetime.fromisoformat(last) >= every
     info = state.setdefault("hotel_info", {})
+    # 반경·키워드 설정이 바뀌면 목록을 새로 만듦 (예전 범위의 호텔이 남지 않게)
+    sig = json.dumps({k: a.get(k) for k in ("lat", "lng", "radius_km", "room_keywords",
+                                            "plan_keywords", "exclude_keywords")},
+                     sort_keys=True, ensure_ascii=False)
+    if state.get("area_sig") != sig:
+        catalog, force_discover = {}, True
+        state["area_sig"] = sig
     if force_discover or not catalog or stale or any(n not in info for n in catalog):
         catalog.update(discover(cfg, info))  # 한 번 찾은 호텔은 계속 유지(매진돼도 목록에 남김)
         state["tatami_catalog"] = catalog
