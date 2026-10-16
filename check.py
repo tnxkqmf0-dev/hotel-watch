@@ -20,6 +20,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import ko
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
 STATE_PATH = os.path.join(ROOT, "state.json")
@@ -350,7 +352,8 @@ def remember_info(info, rec, a):
         return
     m = re.search(r"([^\s市県]+区)", rec["address"])
     info[str(rec["hotelNo"])] = {"ward": m.group(1) if m else "", "station": rec.get("station", ""),
-                                 "km": _km(a, rec.get("lat"), rec.get("lng"))}
+                                 "km": _km(a, rec.get("lat"), rec.get("lng")),
+                                 "lat": rec.get("lat"), "lng": rec.get("lng")}
 
 
 def _chunks(xs, n):
@@ -395,7 +398,7 @@ def collect_area(cfg, state, force_discover=False):
     if state.get("area_sig") != sig:
         catalog, force_discover = {}, True
         state["area_sig"] = sig
-    if force_discover or not catalog or stale or any(n not in info for n in catalog):
+    if force_discover or not catalog or stale or any("lat" not in info.get(n, {}) for n in catalog):
         catalog.update(discover(cfg, info))  # 한 번 찾은 호텔은 계속 유지(매진돼도 목록에 남김)
         state["tatami_catalog"] = catalog
         state["last_discover"] = now_kst().isoformat(timespec="minutes")
@@ -423,11 +426,15 @@ def collect_area(cfg, state, force_discover=False):
     # 렌더링용 호텔 목록 (링크 포함)
     def where(n):
         i = info.get(n, {})
-        parts = [x for x in [i.get("ward"), i.get("station")] if x]
-        if i.get("km") is not None:
-            parts.append(f"중심 {i['km']}km")
-        return " · ".join(parts)
-    cfg["hotels"] = [{"no": int(n), "name": name, "where": where(n),
+        near = ko.nearby(i.get("lat"), i.get("lng"))
+        if near:
+            return near
+        st, area_desc = ko.station(i.get("station"))
+        return " · ".join(x for x in [area_desc or ko.ward(i.get("ward")), st] if x)
+    def ko_name(n, name):
+        k, auto = ko.hotel_name(n, name)
+        return f"{k} ({ko._tidy(name)[:20]})" if auto else k
+    cfg["hotels"] = [{"no": int(n), "name": ko_name(n, name), "where": where(n),
                       "kr": _gsearch(f"라쿠텐 트래블 {name}"), "official": _gsearch(f"{name} 公式")}
                      for n, name in sorted(catalog.items(), key=lambda kv: (info.get(kv[0], {}).get("km") or 99))]
     return found
@@ -465,7 +472,7 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
     blocks = []
     for no in sorted(by_hotel, key=lambda n: order.get(n, 99)):
         rooms = by_hotel[no]
-        name = next(iter(rooms.values()))[0]["displayName"]
+        name = hcfg.get(no, {}).get("name") or next(iter(rooms.values()))[0]["displayName"]
         lines = [f"🏨 <b>{html.escape(name)}</b>"]
         h = hcfg.get(no, {})
         if h.get("where"):
@@ -481,7 +488,7 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
             full = [v for v in vs if v["label"] == "전체"]
             size = f" {area:g}㎡" if area else ""
             badge = " 🆕" if any(v.get("key") in new_keys for v in vs) else ""
-            lines.append(f"• {html.escape(label)}{size}{badge}")
+            lines.append(f"• {html.escape(ko.room_name(label))}{size}{badge}")
             if full:
                 v = min(full, key=plan_rank)
                 lines.append(f"   ✅ {nights}박 전체 {_yen(v)}~/박{_tags(v)} → {_link(v, '楽天JP')}")
@@ -491,7 +498,7 @@ def render_blocks(items, cfg, show_empty=False, new_keys=()):
                 lines.append("   🌙 1박만: " + " · ".join(parts))
         blocks.append("\n".join(lines))
     if show_empty:
-        empty = [h["name"] + (f" ({h['where']})" if h.get("where") else "")
+        empty = [h["name"] + (f" — {h['where']}" if h.get("where") else "")
                  for h in cfg["hotels"] if h["no"] not in by_hotel]
         if empty:
             if len(empty) > 30:  # 많으면 한 줄로 압축
