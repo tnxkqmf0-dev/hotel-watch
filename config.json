@@ -1,36 +1,66 @@
 {
-  "_comment": "다다미방 지역 감시: 나카스 중심 반경 내 楽天 호텔 중 다다미 객실(和室·和洋室·小上がり 등)만 알림. 하루 1번 호텔 목록 재탐색.",
+  "_comment": "텐진역 반경 1km, 楽天 평점 4.0+ (3성급 대용) 호텔 중 트윈/패밀리/다다미 객실, 11/11~14 3박 연박만 알림.",
   "checkin": "2026-11-11",
   "checkout": "2026-11-14",
   "adults": 2,
   "stop_after": "2026-11-03",
   "min_area_m2": 20,
-  "check_partial_nights": true,
+  "check_partial_nights": false,
   "max_total_per_night_yen": null,
   "heartbeat_hour_kst": 8,
   "quiet_hours_kst": [
     22,
     6
   ],
-  "not_on_rakuten": [
-    "LOF Hotel Tenjin South (다다미방 있음, 楽天 미등록)"
-  ],
+  "not_on_rakuten": [],
   "area": {
-    "name": "하카타·나카스·텐진",
-    "lat": 33.5915,
-    "lng": 130.41,
-    "radius_km": 1.5,
+    "name": "텐진역 반경 1km",
+    "title": "텐진 3박",
+    "lat": 33.5914,
+    "lng": 130.3989,
+    "radius_km": 1.0,
+    "min_review": 4.0,
+    "min_review_count": 30,
+    "hotel_exclude_keywords": [
+      "ホステル",
+      "カプセル",
+      "ゲストハウス",
+      "ドミトリー",
+      "Hostel",
+      "HOSTEL",
+      "ＨＯＳＴＥＬ",
+      "レジャー",
+      "ラブ"
+    ],
     "room_keywords": [
+      "ツイン",
+      "トリプル",
+      "フォース",
+      "ファミリー",
+      "ハリウッド",
+      "2台",
+      "２台",
+      "ベッド2",
+      "ベッド２",
+      "Twin",
+      "TWIN",
+      "twin",
+      "Triple",
+      "Family",
+      "family",
       "和室",
       "和洋室",
       "小上がり",
       "小上り",
       "畳",
-      "タタミ",
-      "たたみ",
-      "座敷",
-      "Japanese",
-      "japanese"
+      "座敷"
+    ],
+    "plan_keywords": [
+      "ツイン",
+      "トリプル",
+      "和室",
+      "和洋室",
+      "ファミリー"
     ],
     "exclude_keywords": [
       "喫煙",
@@ -45,10 +75,6 @@
       ]
     ],
     "discover_every_hours": 24,
-    "plan_keywords": [
-      "和室",
-      "和洋室",
-      "小上がり"
-    ]
+    "ref_station": "텐진역"
   }
 }

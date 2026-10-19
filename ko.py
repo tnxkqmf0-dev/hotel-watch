@@ -202,7 +202,7 @@ SPOTS = [
 ]
 
 
-def nearby(lat, lng):
+def nearby(lat, lng, ref="하카타역"):
     """'텐진 번화가 · 텐진역 걸어서 5분' 형태. 좌표 없으면 ''."""
     import math
     try:
@@ -217,9 +217,9 @@ def nearby(lat, lng):
     stations = [p for p in SPOTS if p[2].endswith("역")]
     st = min(stations, key=dist)
     minutes = max(1, round(dist(st) * 1.3 / 80))     # 도보 80m/분, 길 굽이 30% 가산
-    hk = next(p for p in SPOTS if p[2] == "하카타역")
+    hk = next(p for p in SPOTS if p[2] == ref)
     area = min(SPOTS, key=dist)[3]
     out = f"{area} · {st[2]} 걸어서 {minutes}분"
     if st is not hk:
-        out += f" · 하카타역 {dist(hk) / 1000:.1f}km"
+        out += f" · {ref} {max(1, round(dist(hk) * 1.3 / 80))}분"
     return out

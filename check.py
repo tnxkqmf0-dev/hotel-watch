@@ -239,6 +239,7 @@ def parse_response(data):
                 "address": (basic.get("address1") or "") + (basic.get("address2") or ""),
                 "station": basic.get("nearestStation") or "",
                 "lat": basic.get("latitude"), "lng": basic.get("longitude"),
+                "review": basic.get("reviewAverage"), "reviewCount": basic.get("reviewCount"),
             })
     return out
 
@@ -332,6 +333,7 @@ def tatami_match(rec, cfg):
     if area is not None and area < cfg["min_area_m2"]:
         return None
     label = re.sub(r"(【[^】]*】|\[[^\]]*\]|＜[^＞]*＞|<[^>]*>|[■□][^■□]*[■□])", "", room).strip() or room
+    label = AREA_RE.sub("", label).strip(" ・/") or label   # 면적은 따로 표시
     return area, label[:40]
 
 
@@ -360,6 +362,18 @@ def _chunks(xs, n):
     return [xs[i:i + n] for i in range(0, len(xs), n)]
 
 
+def good_hotel(rec, a):
+    """3성급 이상 대용: 楽天 평점·리뷰 수 기준 + 호스텔/캡슐 등 제외 (일본은 공식 성급이 없음)."""
+    name = rec.get("hotelName", "")
+    if any(k in name for k in a.get("hotel_exclude_keywords", [])):
+        return False
+    try:
+        review, cnt = float(rec.get("review") or 0), int(rec.get("reviewCount") or 0)
+    except (TypeError, ValueError):
+        return False
+    return review >= a.get("min_review", 0) and cnt >= a.get("min_review_count", 0)
+
+
 def discover(cfg, info=None):
     """반경 내 楽天 호텔을 훑어 다다미 객실이 있는 호텔 목록 {번호: 이름} 생성."""
     a = cfg["area"]
@@ -368,7 +382,7 @@ def discover(cfg, info=None):
     hotels = {}
     for ci, co in dates:  # 1단계: 반경 내 호텔 번호 수집 (호텔 단위 검색이라 가벼움)
         for rec in fetch_vacancies(geo, ci, co, cfg["adults"], pattern=0):
-            if rec["hotelNo"]:
+            if rec["hotelNo"] and good_hotel(rec, a):
                 hotels[rec["hotelNo"]] = rec["hotelName"]
                 if info is not None:
                     remember_info(info, rec, a)
@@ -380,7 +394,7 @@ def discover(cfg, info=None):
                 if tatami_match(rec, cfg):
                     catalog[str(rec["hotelNo"])] = rec["hotelName"]
             time.sleep(1.2)
-    summary(f"🔎 탐색 완료: 반경 {a['radius_km']}km 호텔 {len(hotels)}곳 중 다다미 객실 보유 {len(catalog)}곳")
+    summary(f"🔎 탐색 완료: 반경 {a['radius_km']}km 평점 기준 통과 {len(hotels)}곳 중 조건 객실 보유 {len(catalog)}곳")
     return catalog
 
 
@@ -393,7 +407,8 @@ def collect_area(cfg, state, force_discover=False):
     info = state.setdefault("hotel_info", {})
     # 반경·키워드 설정이 바뀌면 목록을 새로 만듦 (예전 범위의 호텔이 남지 않게)
     sig = json.dumps({k: a.get(k) for k in ("lat", "lng", "radius_km", "room_keywords",
-                                            "plan_keywords", "exclude_keywords")},
+                                            "plan_keywords", "exclude_keywords", "min_review",
+                                            "min_review_count", "hotel_exclude_keywords")},
                      sort_keys=True, ensure_ascii=False)
     if state.get("area_sig") != sig:
         catalog, force_discover = {}, True
@@ -426,7 +441,7 @@ def collect_area(cfg, state, force_discover=False):
     # 렌더링용 호텔 목록 (링크 포함)
     def where(n):
         i = info.get(n, {})
-        near = ko.nearby(i.get("lat"), i.get("lng"))
+        near = ko.nearby(i.get("lat"), i.get("lng"), a.get("ref_station", "하카타역"))
         if near:
             return near
         st, area_desc = ko.station(i.get("station"))
@@ -568,7 +583,7 @@ def main():
     for k, v in found.items():
         v["key"] = k
     n_hotels = len({found[k]["hotelNo"] for k in cur})
-    kind = "다다미방 " if cfg.get("area") else ""
+    kind = (cfg["area"].get("title", "") + " ") if cfg.get("area") else ""
     summary_line = f"전체 일정 가능 {len(full_hotels)}곳 / 조건 맞는 호텔 {n_hotels}곳 (감시 {len(cfg['hotels'])}곳)"
     if new and mode not in ("test", "discover"):
         head = f"🚨 <b>{kind}빈방 떴다!</b> · {period} · {now:%m/%d %H:%M} 기준\n{summary_line}\n🆕 = 새로 풀린 방"
