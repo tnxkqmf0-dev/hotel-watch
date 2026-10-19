@@ -1,5 +1,5 @@
 {
-  "_comment": "텐진역 반경 1km, 楽天 평점 4.0+ (3성급 대용) 호텔 중 트윈/패밀리/다다미 객실, 11/11~14 3박 연박만 알림.",
+  "_comment": "텐진역 반경 1.2km, 楽天 평점 3.8+ (3성급 대용) 호텔 중 트윈/패밀리/다다미 객실, 11/11~14 3박 연박만 알림.",
   "checkin": "2026-11-11",
   "checkout": "2026-11-14",
   "adults": 2,
@@ -14,12 +14,12 @@
   ],
   "not_on_rakuten": [],
   "area": {
-    "name": "텐진역 반경 1km",
+    "name": "텐진역 반경 1.2km",
     "title": "텐진 3박",
     "lat": 33.5914,
     "lng": 130.3989,
-    "radius_km": 1.0,
-    "min_review": 4.0,
+    "radius_km": 1.2,
+    "min_review": 3.8,
     "min_review_count": 30,
     "hotel_exclude_keywords": [
       "ホステル",
